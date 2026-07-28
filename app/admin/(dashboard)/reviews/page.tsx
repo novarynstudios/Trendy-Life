@@ -1,0 +1,11 @@
+import Link from "next/link"
+import { Star } from "lucide-react"
+import { moderateReviewAction } from "../actions"
+import { getCsrfToken, requireStaff } from "@/src/server/auth/staff"
+import { prisma } from "@/src/server/db/prisma"
+
+export default async function ReviewsPage() {
+  await requireStaff("marketing.view")
+  const [reviews, csrfToken] = await Promise.all([prisma.review.findMany({ take: 150, orderBy: { createdAt: "desc" }, include: { product: true, user: { include: { profile: true } } } }), getCsrfToken()])
+  return <><header className="tl-page-header"><div><nav className="tl-breadcrumbs"><Link href="/admin">Administration</Link><span>/</span><span>Reviews</span></nav><h1>Review moderation</h1><p>Verification, approval, spam controls, staff responses, and featured reviews.</p></div></header><section className="tl-review-grid">{reviews.map((review) => <article className="tl-card" key={review.id}><div className="tl-card-header"><div><h2>{review.product.name}</h2><p>{review.user?.profile ? `${review.user.profile.firstName} ${review.user.profile.lastName}` : review.user?.email ?? "Guest"} · {review.verified ? "Verified purchase" : "Unverified"}</p></div><span className={`tl-status ${review.status.toLocaleLowerCase()}`}>{review.status.toLocaleLowerCase()}</span></div><div className="tl-card-body"><p className="tl-stars">{Array.from({ length: review.rating }, (_, index) => <Star key={index} size={13} fill="currentColor" />)} <strong>{review.title}</strong></p><p>{review.body}</p></div><form className="tl-review-actions" action={moderateReviewAction}><input type="hidden" name="_csrf" value={csrfToken} /><input type="hidden" name="reviewId" value={review.id} /><label>Staff response<textarea name="staffResponse" rows={2} defaultValue={review.staffResponse ?? ""} /></label><label className="tl-checkbox"><input name="featured" type="checkbox" defaultChecked={review.featured} /><span>Feature</span></label><button className="tl-button tl-button-success" name="status" value="APPROVED">Approve</button><button className="tl-button" name="status" value="REJECTED">Reject</button><button className="tl-button tl-button-danger" name="status" value="SPAM">Spam</button></form></article>)}{!reviews.length && <section className="tl-card"><p className="tl-widget-empty">No product reviews.</p></section>}</section></>
+}

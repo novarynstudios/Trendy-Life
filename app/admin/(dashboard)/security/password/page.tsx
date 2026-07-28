@@ -1,0 +1,11 @@
+import Link from "next/link"
+import { changeStaffPasswordAction } from "../security-actions"
+import { getCsrfToken, getStaffPrincipal } from "@/src/server/auth/staff"
+import { redirect } from "next/navigation"
+
+const errors: Record<string, string> = { mismatch: "The new passwords do not match.", current: "The current password is incorrect.", policy: "The new password does not meet the password policy.", history: "Choose a password that has not been used recently." }
+export default async function PasswordPage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string }> }) {
+  const [staff, csrfToken, query] = await Promise.all([getStaffPrincipal(), getCsrfToken(), searchParams])
+  if (!staff) redirect("/admin/login")
+  return <><header className="tl-page-header"><div><nav className="tl-breadcrumbs"><Link href="/admin">Administration</Link><span>/</span><span>Security</span><span>/</span><span>Password</span></nav><h1>Change password</h1><p>Passwords use Argon2id, password history, and a configurable strength policy.</p></div></header>{query.error && <div className="tl-alert tl-alert-danger">{errors[query.error] ?? "Password could not be changed."}</div>}{query.saved && <div className="tl-alert tl-alert-success">Password changed. Other active sessions were revoked.</div>}<form className="tl-card tl-form-section tl-narrow-form" action={changeStaffPasswordAction}><div className="tl-card-header"><h2>Password security</h2></div><div className="tl-card-body tl-form-grid"><input type="hidden" name="_csrf" value={csrfToken} /><label className="span-2">Current password<input name="currentPassword" type="password" autoComplete="current-password" required /></label><label>New password<input name="password" type="password" minLength={12} autoComplete="new-password" required /></label><label>Confirm new password<input name="confirmation" type="password" minLength={12} autoComplete="new-password" required /></label><div className="span-2 tl-inline-note">Use at least 12 characters with uppercase, lowercase, a number, and a symbol. Do not use your name or email, or a recent password.</div><div className="span-2 tl-form-actions"><button className="tl-button tl-button-primary" type="submit">Change password</button></div></div></form></>
+}

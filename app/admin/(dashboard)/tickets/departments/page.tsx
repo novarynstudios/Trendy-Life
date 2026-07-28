@@ -1,0 +1,10 @@
+import Link from "next/link"
+import { saveSupportDepartmentAction } from "../../actions"
+import { getCsrfToken, requireStaff } from "@/src/server/auth/staff"
+import { prisma } from "@/src/server/db/prisma"
+
+export default async function DepartmentsPage({ searchParams }: { searchParams: Promise<{ saved?: string }> }) {
+  await requireStaff("support.manage")
+  const [departments, csrfToken, query] = await Promise.all([prisma.supportDepartment.findMany({ include: { _count: { select: { tickets: true } } }, orderBy: { name: "asc" } }), getCsrfToken(), searchParams])
+  return <><header className="tl-page-header"><div><nav className="tl-breadcrumbs"><Link href="/admin">Administration</Link><span>/</span><Link href="/admin/tickets">Support</Link><span>/</span><span>Departments</span></nav><h1>Support departments</h1><p>Routing, service-level targets, inbox addresses, and current ticket load.</p></div></header>{query.saved && <div className="tl-alert tl-alert-success">Department created.</div>}<div className="tl-detail-grid"><section className="tl-card"><div className="tl-table-scroll"><table className="tl-data-table"><thead><tr><th>Department</th><th>Email</th><th>SLA</th><th>Tickets</th><th>Status</th></tr></thead><tbody>{departments.map((department) => <tr key={department.id}><td><strong>{department.name}</strong></td><td>{department.email ?? "—"}</td><td>{department.slaMinutes} minutes</td><td>{department._count.tickets}</td><td>{department.active ? "Active" : "Disabled"}</td></tr>)}</tbody></table></div></section><aside><form className="tl-card tl-compact-form" action={saveSupportDepartmentAction}><div className="tl-card-header"><h2>Add department</h2></div><div className="tl-card-body"><input type="hidden" name="_csrf" value={csrfToken} /><label>Name<input name="name" required /></label><label>Inbox email<input name="email" type="email" /></label><label>First-response SLA (minutes)<input name="slaMinutes" type="number" min="15" defaultValue="240" required /></label><button className="tl-button tl-button-primary tl-button-wide">Create department</button></div></form></aside></div></>
+}

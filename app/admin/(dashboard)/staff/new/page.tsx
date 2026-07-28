@@ -1,0 +1,10 @@
+import Link from "next/link"
+import { createStaffAction } from "../../actions"
+import { getCsrfToken, requireStaff } from "@/src/server/auth/staff"
+import { prisma } from "@/src/server/db/prisma"
+
+export default async function NewStaffPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  await requireStaff("staff.manage")
+  const [roles, csrfToken, query] = await Promise.all([prisma.staffRole.findMany({ orderBy: { name: "asc" } }), getCsrfToken(), searchParams])
+  return <><header className="tl-page-header"><div><nav className="tl-breadcrumbs"><Link href="/admin">Administration</Link><span>/</span><Link href="/admin/staff">Staff</Link><span>/</span><span>New</span></nav><h1>Create staff account</h1><p>Assign a least-privilege role and require secure onboarding.</p></div></header>{query.error && <div className="tl-alert tl-alert-danger">The password does not meet the configured policy.</div>}<form className="tl-card tl-form-section tl-narrow-form" action={createStaffAction}><div className="tl-card-header"><h2>Staff identity & role</h2></div><div className="tl-card-body tl-form-grid"><input type="hidden" name="_csrf" value={csrfToken} /><label>Name<input name="name" required /></label><label>Email<input name="email" type="email" required /></label><label>Role<select name="roleId" required>{roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}</select></label><label>Temporary password<input name="password" type="password" minLength={12} autoComplete="new-password" required /><small>Account is forced to change this after first sign-in.</small></label><label className="span-2 tl-checkbox-field"><input name="requireTwoFactor" type="checkbox" defaultChecked /><span><strong>Require two-factor authentication</strong><small>Mandatory for privileged roles and recommended for all staff.</small></span></label><div className="span-2 tl-form-actions"><Link className="tl-button" href="/admin/staff">Cancel</Link><button className="tl-button tl-button-primary">Create staff account</button></div></div></form></>
+}

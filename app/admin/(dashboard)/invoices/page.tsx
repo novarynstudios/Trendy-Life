@@ -1,0 +1,11 @@
+import Link from "next/link"
+import { ReceiptText } from "lucide-react"
+import { formatDateTime, money } from "@/lib/format"
+import { requireStaff } from "@/src/server/auth/staff"
+import { prisma } from "@/src/server/db/prisma"
+
+export default async function InvoicesPage() {
+  await requireStaff("orders.view")
+  const invoices = await prisma.invoice.findMany({ take: 100, orderBy: { issueDate: "desc" }, include: { order: { include: { user: { include: { profile: true } } } } } })
+  return <><header className="tl-page-header"><div><nav className="tl-breadcrumbs"><Link href="/admin">Administration</Link><span>/</span><span>Invoices</span></nav><h1>Invoices</h1><p>Sequential Trendy Life invoices, payment state, PDFs, credit notes, and refund receipts.</p></div><div className="tl-page-actions"><Link className="tl-button" href="/admin/settings?section=invoices">Invoice settings</Link></div></header><section className="tl-card"><div className="tl-table-scroll"><table className="tl-data-table"><thead><tr><th>Invoice</th><th>Order</th><th>Customer</th><th>Issue date</th><th>Status</th><th className="numeric">Total</th><th className="numeric">Paid</th><th className="numeric">Due</th><th>Action</th></tr></thead><tbody>{invoices.map((invoice) => <tr key={invoice.id}><td><Link className="tl-table-primary" href={`/admin/invoices/${invoice.id}`}>{invoice.invoiceNumber}</Link></td><td><Link href={`/admin/orders/${invoice.orderId}`}>{invoice.order.orderNumber}</Link></td><td>{invoice.order.user?.profile ? `${invoice.order.user.profile.firstName} ${invoice.order.user.profile.lastName}` : invoice.order.user?.email ?? "Guest"}</td><td>{formatDateTime(invoice.issueDate.toISOString())}</td><td><span className={`tl-status ${invoice.status.toLocaleLowerCase()}`}>{invoice.status.replaceAll("_"," ").toLocaleLowerCase()}</span></td><td className="numeric">{money(Number(invoice.total))}</td><td className="numeric">{money(Number(invoice.paidAmount))}</td><td className="numeric">{money(Number(invoice.dueAmount))}</td><td><Link className="tl-table-action" href={`/api/admin/invoices/${invoice.id}/pdf`}>PDF</Link></td></tr>)}{!invoices.length && <tr><td colSpan={9}><p className="tl-widget-empty"><ReceiptText size={16} />No invoices generated yet.</p></td></tr>}</tbody></table></div></section></>
+}

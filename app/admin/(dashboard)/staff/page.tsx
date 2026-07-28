@@ -1,0 +1,11 @@
+import Link from "next/link"
+import { Plus } from "lucide-react"
+import { formatDateTime } from "@/lib/format"
+import { requireStaff } from "@/src/server/auth/staff"
+import { prisma } from "@/src/server/db/prisma"
+
+export default async function StaffPage() {
+  await requireStaff("staff.view")
+  const staff = await prisma.staff.findMany({ orderBy: { createdAt: "desc" }, include: { role: true, twoFactorSecret: true, sessions: { where: { revokedAt: null }, select: { id: true } } } })
+  return <><header className="tl-page-header"><div><nav className="tl-breadcrumbs"><Link href="/admin">Administration</Link><span>/</span><span>Staff</span></nav><h1>Staff & access control</h1><p>Roles, granular permissions, two-factor policy, sessions, status, and activity.</p></div><div className="tl-page-actions"><Link className="tl-button" href="/admin/staff/roles">Roles & permissions</Link><Link className="tl-button tl-button-primary" href="/admin/staff/new"><Plus size={14} />Create staff account</Link></div></header><section className="tl-card"><div className="tl-table-scroll"><table className="tl-data-table"><thead><tr><th>Staff member</th><th>Email</th><th>Role</th><th>Status</th><th>Two-factor</th><th>Active sessions</th><th>Last login</th><th>Last IP</th><th>Created</th><th>Action</th></tr></thead><tbody>{staff.map((member) => <tr key={member.id}><td><Link className="tl-table-primary" href={`/admin/staff/${member.id}`}>{member.name}</Link></td><td>{member.email}</td><td>{member.role.name}</td><td><span className={`tl-status ${member.status.toLocaleLowerCase()}`}>{member.status.toLocaleLowerCase()}</span></td><td><span className={`tl-status ${member.twoFactorSecret?.verifiedAt && !member.twoFactorSecret.disabledAt ? "active" : "warning"}`}>{member.twoFactorSecret?.verifiedAt && !member.twoFactorSecret.disabledAt ? "enabled" : "not enabled"}</span></td><td>{member.sessions.length}</td><td>{member.lastLoginAt ? formatDateTime(member.lastLoginAt.toISOString()) : "Never"}</td><td>{member.lastIp ?? "—"}</td><td>{formatDateTime(member.createdAt.toISOString())}</td><td><Link className="tl-table-action" href={`/admin/staff/${member.id}`}>Review</Link></td></tr>)}</tbody></table></div></section></>
+}

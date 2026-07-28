@@ -1,0 +1,21 @@
+import Link from "next/link"
+import { notFound } from "next/navigation"
+import { ArrowLeft, Save } from "lucide-react"
+import { formatDateTime, money } from "@/lib/format"
+import { adjustInventoryAction } from "../../actions"
+import { getCsrfToken, requireStaff } from "@/src/server/auth/staff"
+import { prisma } from "@/src/server/db/prisma"
+
+export default async function InventoryDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string }> }) {
+  await requireStaff("inventory.view")
+  const [{ id }, query, csrfToken] = await Promise.all([params, searchParams, getCsrfToken()])
+  const item = await prisma.inventoryItem.findUnique({ where: { id }, include: { product: true, variant: true, warehouse: true, movements: { orderBy: { createdAt: "desc" }, take: 100, include: { staff: { select: { name: true } } } } } })
+  if (!item) notFound()
+  const name = item.variant ? `${item.product.name} — ${item.variant.name}` : item.product.name
+  return <>
+    <header className="tl-page-header"><div><nav className="tl-breadcrumbs"><Link href="/admin">Administration</Link><span>/</span><Link href="/admin/inventory">Inventory</Link><span>/</span><span>{item.variant?.sku ?? item.product.sku}</span></nav><Link className="tl-back-link" href="/admin/inventory"><ArrowLeft size={13} />Back to inventory</Link><h1>{name}</h1><p>{item.warehouse.name} · {item.variant?.sku ?? item.product.sku}</p></div></header>
+    {query.saved && <div className="tl-alert tl-alert-success">Inventory adjustment recorded.</div>}
+    <section className="tl-summary-stat-grid"><article><span>On hand</span><strong>{item.onHand}</strong></article><article><span>Reserved</span><strong>{item.reserved}</strong></article><article><span>Available</span><strong>{item.onHand - item.reserved - item.damaged}</strong></article><article><span>Incoming</span><strong>{item.incoming}</strong></article><article><span>Damaged</span><strong>{item.damaged}</strong></article><article><span>Inventory value</span><strong>{money(item.onHand * Number(item.variant?.costPrice ?? item.product.costPrice ?? 0))}</strong></article></section>
+    <div className="tl-detail-grid"><section className="tl-card"><div className="tl-card-header"><div><h2>Immutable stock movement log</h2><p>Every adjustment, sale, reservation, return, and transfer</p></div></div><div className="tl-table-scroll"><table className="tl-data-table"><thead><tr><th>Date</th><th>Type</th><th className="numeric">Quantity</th><th className="numeric">Balance after</th><th>Reason</th><th>Reference</th><th>Staff</th></tr></thead><tbody>{item.movements.map((movement) => <tr key={movement.id}><td>{formatDateTime(movement.createdAt.toISOString())}</td><td><span className="tl-status">{movement.type.replaceAll("_"," ").toLocaleLowerCase()}</span></td><td className="numeric"><strong>{movement.quantity > 0 ? `+${movement.quantity}` : movement.quantity}</strong></td><td className="numeric">{movement.balanceAfter}</td><td>{movement.reason}</td><td>{movement.referenceType ? `${movement.referenceType} ${movement.referenceId}` : "—"}</td><td>{movement.staff?.name ?? "System"}</td></tr>)}</tbody></table></div></section><aside className="tl-detail-aside"><form className="tl-card tl-compact-form" action={adjustInventoryAction}><div className="tl-card-header"><h2>Adjust stock</h2></div><div className="tl-card-body"><input type="hidden" name="_csrf" value={csrfToken} /><input type="hidden" name="inventoryItemId" value={item.id} /><label>Quantity change<input name="delta" type="number" placeholder="+10 or -3" required /></label><label>Mandatory reason<textarea name="reason" rows={4} required /></label><p className="tl-muted">Negative stock is blocked unless backorders are enabled. The transaction uses a row lock.</p><button className="tl-button tl-button-primary tl-button-wide" type="submit"><Save size={14} />Record adjustment</button></div></form><section className="tl-card tl-record-meta"><div className="tl-card-header"><h2>Inventory item</h2></div><dl><div><dt>Warehouse</dt><dd>{item.warehouse.name}</dd></div><div><dt>Product</dt><dd>{item.product.name}</dd></div><div><dt>Variation</dt><dd>{item.variant?.name ?? "Base product"}</dd></div><div><dt>Version</dt><dd>{item.version}</dd></div></dl></section></aside></div>
+  </>
+}

@@ -1,0 +1,12 @@
+import Link from "next/link"
+import { money } from "@/lib/format"
+import { requireStaff } from "@/src/server/auth/staff"
+import { prisma } from "@/src/server/db/prisma"
+
+export default async function PromotionReportsPage() {
+  await requireStaff("marketing.view")
+  const coupons = await prisma.coupon.findMany({ include: { usages: { include: { order: { select: { total: true } } } } }, orderBy: { code: "asc" } })
+  const discountTotal = coupons.reduce((sum, coupon) => sum + coupon.usages.reduce((value, usage) => value + Number(usage.discountAmount), 0), 0)
+  const influencedRevenue = coupons.reduce((sum, coupon) => sum + coupon.usages.reduce((value, usage) => value + Number(usage.order.total), 0), 0)
+  return <><header className="tl-page-header"><div><nav className="tl-breadcrumbs"><Link href="/admin">Administration</Link><span>/</span><Link href="/admin/marketing">Marketing</Link><span>/</span><span>Reports</span></nav><h1>Promotion performance</h1><p>Coupon usage, discount cost, influenced revenue, and redemption performance.</p></div><Link className="tl-button tl-button-primary" href="/admin/exports/coupons">Export CSV</Link></header><section className="tl-summary-stat-grid"><article><span>Redemptions</span><strong>{coupons.reduce((sum, coupon) => sum + coupon.usages.length, 0)}</strong></article><article><span>Discount total</span><strong>{money(discountTotal)}</strong></article><article><span>Influenced revenue</span><strong>{money(influencedRevenue)}</strong></article><article><span>Revenue / discount</span><strong>{discountTotal ? (influencedRevenue / discountTotal).toFixed(2) : "0.00"}×</strong></article></section><section className="tl-card"><div className="tl-table-scroll"><table className="tl-data-table"><thead><tr><th>Coupon</th><th>Type</th><th>Uses</th><th className="numeric">Discount</th><th className="numeric">Influenced revenue</th><th className="numeric">Average order</th></tr></thead><tbody>{coupons.map((coupon) => { const revenue = coupon.usages.reduce((sum, usage) => sum + Number(usage.order.total), 0); const discount = coupon.usages.reduce((sum, usage) => sum + Number(usage.discountAmount), 0); return <tr key={coupon.id}><td><strong>{coupon.code}</strong></td><td>{coupon.type}</td><td>{coupon.usages.length}</td><td className="numeric">{money(discount)}</td><td className="numeric">{money(revenue)}</td><td className="numeric">{money(coupon.usages.length ? revenue / coupon.usages.length : 0)}</td></tr> })}</tbody></table></div></section></>
+}
